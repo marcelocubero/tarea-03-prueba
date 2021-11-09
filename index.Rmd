@@ -21,30 +21,20 @@ library(plotly)
 library(leaflet)
 library(leaflet.extras)
 library(leafem)
+library(shiny)
+library(shinydashboard)
+library(shinyWidgets)
+library(tidyverse)
 ```
 
 ```{r datos , warning=FALSE, message=FALSE}
 
 casos_p <-
-    st_read("/vsicurl/https://marcelocubero.github.io/capas_proyecto/casos.geojson",
+  st_read("/vsicurl/https://marcelocubero.github.io/capas_proyecto/casos.geojson",
           quiet = TRUE)
- casos_p <-
+casos_p <-
   casos_p %>%
   st_transform(4326)
-
-
-#casos_p <-
- # st_read("/vsicurl/https://marcelocubero.github.io/capas_proyecto/casos_puntos_wgs.csv", 
- #     options = c(
- #     "X_POSSIBLE_NAMES=X",
- #     "Y_POSSIBLE_NAMES=Y",
- #     encoding = "UTF-8"
- #   ),
-#    quiet = TRUE
-#  )
-#st_crs(casos_p) <- 4326
-
-
 
 fallecidos <-
   rast("/vsicurl/https://marcelocubero.github.io/capas_proyecto/fallecidos.tif")
@@ -60,16 +50,13 @@ lista_canton <- sort(lista_canton)
 lista_canton <- c("Todas", lista_canton)
 ```
 
-
-
-
 Mapa
 =====================================
 
 Column {.sidebar}
 -----------------------------------------------------------------------
 ```{r}
-h3("Filtros") 
+h3("Filtros")
 
 h2("Provincias")
 selectInput(
@@ -88,37 +75,72 @@ selectInput(
 )
 
 h2("Positivos")
-sliderInput(
-  inputId ="positivos", 
-  "Casos positivos:", 1, 52000, 52000)
+numericRangeInput(
+  inputId = "positivos",
+  label = "Casos Positivos",
+  value = c(1, 52000),
+  width = NULL,
+  separator = " a ",
+  min = 1,
+  max =52000,
+  step = NA
+)
+
 
 h2("Activos")
-sliderInput(
-  inputId ="activos", 
-  "Casos activos:", 1, 7600, 7600)
+
+numericRangeInput(
+  inputId = "activos",
+  label = "Casos Activos",
+  value = c(1, 7600),
+  width = NULL,
+  separator = " a ",
+  min = 1,
+  max = 7600,
+  step = NA
+)
 
 
 
- filtrarRegistros <-  reactive({
-   casos_f <-
-  casos_p %>%
+
+
+
+
+
+
+filtrarRegistros <-  reactive({
+  casos_f <-
+    casos_p %>%
     dplyr::select(canton, provincia, positivos, activos)
-   
-   if (input$provincia != "Todas") {
+  
+casos_f <-
+  casos_f %>%
+  filter(
+    activos >= input$activos[1] &
+     activos <= input$activos[2]
+  ) 
+
+casos_f <-
+  casos_f %>%
+  filter(
+   positivos >= input$positivos[1] &
+    positivos <= input$positivos[2]
+  )
+  
+  if (input$provincia != "Todas") {
     casos_f <-
       casos_f %>%
       filter(provincia == input$provincia)
-   }
-   
-   if (input$canton != "Todas") {
+  }
+  
+  if (input$canton != "Todas") {
     casos_f <-
       casos_f %>%
       filter(canton == input$canton)
-   }
-
+  }
+  
   return(casos_f)
 })
-
 
 ```
 
@@ -142,80 +164,82 @@ pal2 <- colorBin('Accent', domain = at , na.color = "transparent")
 renderLeaflet({
   registros <-
     filtrarRegistros()
-
-leaflet() %>%
-  addTiles(group = "OSM") %>%
-  addProviderTiles(providers$Esri.NatGeoWorldMap , group = "NatGeo") %>%
-  addProviderTiles(providers$CartoDB.DarkMatter, group = "CartoDB-Black") %>%
-  addRasterImage(fallecidos_rl,
-                 opacity = 1,
-                 group = "Fallecidos",
-                 colors = pal2) %>%
-  addLegend("bottomleft",
-            pal = pal2,
-            values = at,
-            title = "Fallecidos") %>%
-  addPolygons(
-    data = registros,
-    color = "black",
-    fillColor = ~ pal(activos),
-    fillOpacity = 1,
-    weight = 1,
-    opacity = 1,
-    stroke = TRUE,
-    group = "Casos Activos",
-    popup = paste0(
-      "<strong>Cantón: </strong>",
-      casos_p$canton,
-      "<br>",
-      "<strong>Casos activos: </strong>",
-      casos_p$activos
-    )
-  ) %>%
-  addLegend(
-    pal = pal,
-    values = casos_p$activos,
-    opacity = 1,
-    title = "Casos Activos"
-  ) %>%
-  addPolygons(
-    data = registros,
-    color = "black",
-    fillColor = ~ pal3(positivos),
-    fillOpacity = 1,
-    weight = 1,
-    opacity = 1,
-    stroke = TRUE,
-    group = "Casos Positivos",
-    popup = paste0(
-      "<strong>Cantón: </strong>",
-      casos_p$canton,
-      "<br>",
-      "<strong>Casos positivos: </strong>",
-      casos_p$positivos
-    )
-  ) %>%
-  addLegend(
-    pal = pal3,
-    values = casos_p$activos,
-    opacity = 1,
-    title = "Casos Positivos"
-  ) %>%
   
-  addLayersControl(
-    "bottomleft",
-    baseGroups = c("OSM", "NatGeo", "CartoDB-Black"),
-    overlayGroups = c("Fallecidos", "Casos Activos", "Casos Positivos"),
-    options = layersControlOptions(collapsed = TRUE)
-  ) %>%
-  addScaleBar("bottomright") %>%
-  addMiniMap() %>%
-  addResetMapButton() %>%
-  addFullscreenControl() %>%
-  addControlGPS() %>%
-  addSearchOSM() %>% 
-  addMouseCoordinates()
-
+  leaflet() %>%
+    addTiles(group = "OSM") %>%
+    addProviderTiles(providers$Esri.NatGeoWorldMap , group = "NatGeo") %>%
+    addProviderTiles(providers$CartoDB.DarkMatter, group = "CartoDB-Black") %>%
+    addRasterImage(
+      fallecidos_rl,
+      opacity = 1,
+      group = "Fallecidos",
+      colors = pal2
+    ) %>%
+    addLegend("bottomleft",
+              pal = pal2,
+              values = at,
+              title = "Fallecidos") %>%
+    addPolygons(
+      data = registros,
+      color = "black",
+      fillColor = ~ pal(activos),
+      fillOpacity = 1,
+      weight = 1,
+      opacity = 1,
+      stroke = TRUE,
+      group = "Casos Activos",
+      popup = paste0(
+        "<strong>Cantón: </strong>",
+        casos_p$canton,
+        "<br>",
+        "<strong>Casos activos: </strong>",
+        casos_p$activos
+      )
+    ) %>%
+    addLegend(
+      pal = pal,
+      values = casos_p$activos,
+      opacity = 1,
+      title = "Casos Activos"
+    ) %>%
+    addPolygons(
+      data = registros,
+      color = "black",
+      fillColor = ~ pal3(positivos),
+      fillOpacity = 1,
+      weight = 1,
+      opacity = 1,
+      stroke = TRUE,
+      group = "Casos Positivos",
+      popup = paste0(
+        "<strong>Cantón: </strong>",
+        casos_p$canton,
+        "<br>",
+        "<strong>Casos positivos: </strong>",
+        casos_p$positivos
+      )
+    ) %>%
+    addLegend(
+      pal = pal3,
+      values = casos_p$activos,
+      opacity = 1,
+      title = "Casos Positivos"
+    ) %>%
+    
+    addLayersControl(
+      "bottomleft",
+      baseGroups = c("OSM", "NatGeo", "CartoDB-Black"),
+      overlayGroups = c("Fallecidos", "Casos Activos", "Casos Positivos"),
+      options = layersControlOptions(collapsed = TRUE)
+    ) %>%
+    addScaleBar("bottomright") %>%
+    addMiniMap() %>%
+    addResetMapButton() %>%
+    addFullscreenControl() %>%
+    addControlGPS() %>%
+    addSearchOSM() %>%
+    addMouseCoordinates()
+  
 })
 
 ```
@@ -235,12 +259,17 @@ renderDT({
   registros <- filtrarRegistros()
   
   registros %>%
-  st_drop_geometry() %>%
-  select(Cantón= canton,Provincia= provincia, Casos_Activos= activos, Casos_Positivos= positivos) %>%
-datatable(options = list(
-  language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')))
-
-
+    st_drop_geometry() %>%
+    select(
+      Cantón = canton,
+      Provincia = provincia,
+      Casos_Activos = activos,
+      Casos_Positivos = positivos
+    ) %>%
+    datatable(options = list(
+      language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
+    ))
+  
 })
 
 
@@ -257,22 +286,22 @@ renderPlotly({
   registros <- filtrarRegistros()
   registros %>%
     st_drop_geometry() %>%
-
-ggplot( aes(x = canton, y = positivos)) +
-  geom_col(width = 0.5, fill = "Red") +
-  ggtitle("Casos Positivos por cantón") +
-  xlab("Cantón") +
-  ylab("Cantidad de casos positivos") +
-  theme(
-    plot.title = element_text(size = 16, face = "bold"),
-    text = element_text(size = 8),
-    axis.text.x = element_text(
-      angle = 90,
-      vjust = 0.5,
-      hjust = 1
+    
+    ggplot(aes(x = canton, y = positivos)) +
+    geom_col(width = 0.5, fill = "Red") +
+    ggtitle("Casos Positivos por cantón") +
+    xlab("Cantón") +
+    ylab("Cantidad de casos positivos") +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      text = element_text(size = 8),
+      axis.text.x = element_text(
+        angle = 90,
+        vjust = 0.5,
+        hjust = 1
+      )
     )
-  ) 
-
+  
 })
 ```
 
@@ -288,22 +317,22 @@ renderPlotly({
   registros <- filtrarRegistros()
   registros %>%
     st_drop_geometry() %>%
-
-ggplot( aes(x = canton, y = activos)) +
-  geom_col(width = 0.5, fill = "Brown") +
-  ggtitle("Casos Activos por cantón") +
-  xlab("Cantón") +
-  ylab("Cantidad de casos activos") +
-  theme(
-    plot.title = element_text(size = 16, face = "bold"),
-    text = element_text(size = 8),
-    axis.text.x = element_text(
-      angle = 90,
-      vjust = 0.5,
-      hjust = 1
+    
+    ggplot(aes(x = canton, y = activos)) +
+    geom_col(width = 0.5, fill = "Brown") +
+    ggtitle("Casos Activos por cantón") +
+    xlab("Cantón") +
+    ylab("Cantidad de casos activos") +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      text = element_text(size = 8),
+      axis.text.x = element_text(
+        angle = 90,
+        vjust = 0.5,
+        hjust = 1
+      )
     )
-  )
-
+  
 })
 
 
@@ -312,6 +341,7 @@ ggplot( aes(x = canton, y = activos)) +
 
 Acerca del Covid-19 {data-orientation=rows}
 ===================================== 
+
 
 ### Acerca del COVID-19 
 
