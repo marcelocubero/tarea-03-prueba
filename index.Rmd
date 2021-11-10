@@ -24,6 +24,7 @@ library(leafem)
 library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
+library(rgdal)
 library(tidyverse)
 ```
 
